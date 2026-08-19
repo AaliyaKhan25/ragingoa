@@ -74,3 +74,10 @@ def retrieve(req: RetrieveRequest):
         chunks=chunks,
         latency_ms=latency_ms
     )
+if __name__ == "__main__":
+    import os
+    import uvicorn
+
+    # Render sets the PORT env variable automatically
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
