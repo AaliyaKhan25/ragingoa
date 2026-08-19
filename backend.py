@@ -3,6 +3,7 @@ import time
 import logging
 import httpx
 import os
+import requests
 from groq import Groq
 
 # Configure logging for structured output and benchmarking
@@ -12,7 +13,40 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Voice-Enabled RAG Harness")
 
 RETRIEVAL_URL = "http://127.0.0.1:8000/retrieve"
+
 groq_client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+
+SARVAM_API_KEY = os.environ.get("SARVAM_API_KEY")
+SARVAM_STT_URL = "https://api.sarvam.ai/speech-to-text"
+
+
+# Real function: Sarvam speech-to-text
+async def transcribe_audio(audio_bytes: bytes, filename: str = "audio.wav") -> str:
+    # Guess content-type from the file extension since we're not always given .wav
+    ext = filename.lower().split(".")[-1] if "." in filename else "wav"
+    content_type_map = {
+        "wav": "audio/wav", "mp3": "audio/mpeg", "mp4": "audio/mp4",
+        "m4a": "audio/mp4", "ogg": "audio/ogg", "webm": "audio/webm",
+        "flac": "audio/flac", "aac": "audio/aac",
+    }
+    content_type = content_type_map.get(ext, "audio/wav")
+
+    try:
+        response = requests.post(
+            SARVAM_STT_URL,
+            headers={"api-subscription-key": SARVAM_API_KEY},
+            files={"file": (filename, audio_bytes, content_type)},
+            data={"model": "saarika:v2.5", "language_code": "unknown"},
+            timeout=10
+        )
+        if response.status_code != 200:
+            logger.error(f"STT call failed: {response.status_code} - {response.text}")
+            return ""
+        result = response.json()
+        return result.get("transcript", "")
+    except Exception as e:
+        logger.error(f"STT call failed: {e}")
+        return ""
 
 
 # Real function: retrieves context from app.py, then generates a grounded answer via Groq
@@ -73,12 +107,6 @@ async def execute_rag_pipeline(transcribed_text: str) -> str | None:
         return f"Based on the retrieved context: {chunks[0]['passage'][:400]}"
 
 
-# Mock function: Voice-to-text transcription
-# TODO: replace with real Sarvam or ElevenLabs STT call
-async def transcribe_audio(audio_bytes: bytes) -> str:
-    return "What is the capital of France?"
-
-
 @app.post("/api/v1/voice-query")
 async def process_voice_query(audio_file: UploadFile = File(...)):
     start_time = time.time()
@@ -90,8 +118,18 @@ async def process_voice_query(audio_file: UploadFile = File(...)):
 
         # 2. Transcription (Voice-to-text input)
         transcription_start = time.time()
-        question_text = await transcribe_audio(audio_bytes)
+        question_text = await transcribe_audio(audio_bytes, audio_file.filename)
         logger.info(f"Transcription took: {(time.time() - transcription_start) * 1000:.2f}ms")
+
+        # Guardrail: empty/failed transcription -> don't proceed
+        if not question_text.strip():
+            total_latency_ms = (time.time() - start_time) * 1000
+            return {
+                "status": "error",
+                "latency_ms": round(total_latency_ms, 2),
+                "transcription": "",
+                "answer": "I couldn't understand the audio. Please try again."
+            }
 
         # 3. Execute RAG Pipeline (End-to-end integration: retrieval + generation + guardrails)
         rag_start = time.time()
