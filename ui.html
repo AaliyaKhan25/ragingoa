@@ -1,10 +1,352 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Title</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>HHGoa Voice-to-Text Pipeline</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,700;1,6..96,400&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      background-color: #FFFDEB;
+      color: #044D29;
+    }
+    .font-serif-display { font-family: 'Bodoni Moda', serif; }
+    .font-mono-code { font-family: 'JetBrains Mono', monospace; }
+    .bg-hh-green { background-color: #044D29; }
+    .border-hh-green { border-color: #044D29; }
+    .text-hh-green { color: #044D29; }
+    .bg-hh-pink { background-color: #FF007A; }
+    .hover\:bg-hh-pink-dark:hover { background-color: #E0006B; }
+    .bg-hh-yellow { background-color: #FFE600; }
+    .text-hh-pink { color: #FF007A; }
+    .text-hh-yellow { color: #FFE600; }
+  </style>
 </head>
-<body>
+<body class="p-6 md:p-10 min-h-screen">
+
+  <div class="max-w-6xl mx-auto space-y-6">
+
+    <!-- Top Navigation Header -->
+    <header class="flex items-center justify-between border-b-2 border-hh-green pb-4">
+      <div>
+        <h1 class="font-serif-display text-3xl font-bold tracking-tight text-hh-green italic">
+          Hacker House Goa
+        </h1>
+        <p class="font-mono-code text-xs uppercase tracking-widest text-hh-green opacity-80 mt-1">
+          // Voice-Enabled RAG Pipeline
+        </p>
+      </div>
+
+      <div class="flex items-center space-x-3 font-mono-code text-xs">
+        <span id="status-badge" class="bg-rose-200 text-hh-green px-3 py-1 font-bold border border-hh-green rounded-full shadow-[2px_2px_0px_#044D29]">
+          HARNESS OFFLINE
+        </span>
+        <span class="bg-hh-pink text-white px-3 py-1 font-bold border border-hh-green rounded-full shadow-[2px_2px_0px_#044D29]">
+          SARVAM STT
+        </span>
+      </div>
+    </header>
+
+    <!-- Hero Waveform & Control Bar -->
+    <div class="bg-hh-green text-[#FFFDEB] rounded-2xl p-6 shadow-[6px_6px_0px_#FF007A] border-2 border-hh-green">
+      <div class="flex justify-between items-center mb-4 font-mono-code text-xs text-[#FFFDEB]/80">
+        <span>AUDIO INPUT WAVEFORM</span>
+        <span id="timer" class="text-hh-yellow">00:00</span>
+      </div>
+
+      <!-- Waveform Bar -->
+      <div class="h-24 bg-[#02331B] rounded-xl border border-hh-green/40 flex items-center justify-center space-x-2 px-4 mb-6">
+        <div id="wf" class="flex items-center space-x-2">
+          <div class="w-2 bg-hh-yellow/40 h-4 rounded-full"></div>
+          <div class="w-2 bg-hh-yellow/40 h-4 rounded-full"></div>
+          <div class="w-2 bg-hh-pink/40 h-4 rounded-full"></div>
+          <div class="w-2 bg-hh-yellow/40 h-4 rounded-full"></div>
+          <div class="w-2 bg-hh-yellow/40 h-4 rounded-full"></div>
+          <div class="w-2 bg-hh-pink/40 h-4 rounded-full"></div>
+          <div class="w-2 bg-hh-yellow/40 h-4 rounded-full"></div>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex flex-wrap items-center justify-between gap-4 font-mono-code">
+        <div class="flex items-center space-x-3">
+          <button id="record-btn" class="bg-hh-pink hover:bg-hh-pink-dark text-white font-bold px-6 py-2.5 rounded-xl border-2 border-black shadow-[3px_3px_0px_#FFE600] transition active:translate-y-0.5">
+            ● RECORD
+          </button>
+          <button id="run-btn" disabled class="bg-black/30 text-white/40 font-bold px-5 py-2.5 rounded-xl border-2 border-hh-green/40 transition cursor-not-allowed">
+            RUN PIPELINE
+          </button>
+          <button id="reset-btn" class="bg-black/40 text-rose-300 font-bold px-5 py-2.5 rounded-xl border border-rose-400/40 hover:bg-rose-950 transition">
+            RESET
+          </button>
+        </div>
+
+        <label class="bg-hh-yellow text-hh-green font-bold px-5 py-2.5 rounded-xl border-2 border-hh-green shadow-[3px_3px_0px_#044D29] hover:bg-white transition cursor-pointer">
+          + UPLOAD AUDIO FILE
+          <input id="file-input" type="file" accept="audio/*" class="hidden" />
+        </label>
+      </div>
+      <p id="error-msg" class="hidden font-mono-code text-xs text-hh-yellow mt-3"></p>
+    </div>
+
+    <!-- Output & Pipeline Info -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- Live Transcription Output Container -->
+      <div class="lg:col-span-2 bg-[#FFFDEB] border-2 border-hh-green rounded-2xl p-6 shadow-[6px_6px_0px_#044D29] flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between border-b-2 border-hh-green pb-3 mb-4">
+            <h2 class="font-serif-display text-2xl font-bold italic text-hh-green">Transcribed Speech</h2>
+            <span id="status-pill" class="font-mono-code text-xs bg-hh-yellow px-2.5 py-1 rounded border border-hh-green font-bold">
+              IDLE
+            </span>
+          </div>
+
+          <p id="transcript-text" class="font-mono-code text-hh-green text-base leading-relaxed min-h-[80px]">
+            &gt; Record or upload audio, then run the pipeline to see the transcript here.
+          </p>
+
+          <div class="mt-6 border-t-2 border-hh-green/20 pt-4">
+            <h2 class="font-serif-display text-xl italic text-hh-green mb-2">Answer</h2>
+            <p id="answer-text" class="font-mono-code text-hh-green/80 text-sm leading-relaxed">—</p>
+          </div>
+        </div>
+
+        <!-- Export Buttons -->
+        <div class="flex items-center justify-between pt-4 border-t border-hh-green/30 mt-6 font-mono-code text-xs">
+          <div class="flex space-x-2">
+            <button id="copy-btn" class="bg-hh-green text-[#FFFDEB] px-4 py-2 rounded-lg font-bold hover:bg-hh-pink transition">
+              COPY TEXT
+            </button>
+          </div>
+          <span id="word-count" class="text-hh-green/70 font-bold">0 WORDS</span>
+        </div>
+      </div>
+
+      <!-- HHGoa System Configuration -->
+      <div class="bg-hh-green text-[#FFFDEB] border-2 border-hh-green rounded-2xl p-6 shadow-[6px_6px_0px_#FF007A] font-mono-code space-y-6">
+        <div>
+          <h3 class="font-serif-display text-xl italic text-hh-yellow mb-3">Pipeline Config</h3>
+          <div class="space-y-3 text-xs pt-3">
+            <div class="flex justify-between border-b border-[#FFFDEB]/10 pb-2">
+              <span class="opacity-70">STT</span>
+              <span class="text-hh-yellow font-bold">Sarvam saarika:v2.5</span>
+            </div>
+            <div class="flex justify-between border-b border-[#FFFDEB]/10 pb-2">
+              <span class="opacity-70">RETRIEVAL</span>
+              <span class="font-bold">MiniLM + FAISS</span>
+            </div>
+            <div class="flex justify-between border-b border-[#FFFDEB]/10 pb-2">
+              <span class="opacity-70">GENERATION</span>
+              <span class="text-hh-pink font-bold">Groq gpt-oss-20b</span>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 class="font-serif-display text-xl italic text-hh-yellow mb-3">Last Run</h3>
+          <div class="space-y-3 text-xs pt-3">
+            <div class="flex justify-between border-b border-[#FFFDEB]/10 pb-2">
+              <span class="opacity-70">STATUS</span>
+              <span id="last-status" class="font-bold">—</span>
+            </div>
+            <div class="flex justify-between border-b border-[#FFFDEB]/10 pb-2">
+              <span class="opacity-70">LATENCY</span>
+              <span id="last-latency" class="text-hh-yellow font-bold">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+<script>
+  const API_BASE = "http://127.0.0.1:5050";
+  const $ = (id) => document.getElementById(id);
+
+  const statusBadge = $("status-badge");
+  const recordBtn = $("record-btn");
+  const runBtn = $("run-btn");
+  const resetBtn = $("reset-btn");
+  const fileInput = $("file-input");
+  const errorMsg = $("error-msg");
+  const timer = $("timer");
+  const wf = $("wf");
+  const transcriptText = $("transcript-text");
+  const answerText = $("answer-text");
+  const statusPill = $("status-pill");
+  const wordCount = $("word-count");
+  const lastStatus = $("last-status");
+  const lastLatency = $("last-latency");
+  const copyBtn = $("copy-btn");
+
+  let mediaRecorder = null;
+  let audioChunks = [];
+  let recording = false;
+  let audioBlob = null;
+  let timerInterval = null;
+  let seconds = 0;
+
+  async function checkHealth() {
+    try {
+      const res = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(3000) });
+      if (res.ok) {
+        statusBadge.textContent = "HARNESS LIVE";
+        statusBadge.className = "bg-hh-yellow text-hh-green px-3 py-1 font-bold border border-hh-green rounded-full shadow-[2px_2px_0px_#044D29]";
+        return;
+      }
+    } catch (e) {}
+    statusBadge.textContent = "HARNESS OFFLINE";
+    statusBadge.className = "bg-rose-200 text-hh-green px-3 py-1 font-bold border border-hh-green rounded-full shadow-[2px_2px_0px_#044D29]";
+  }
+  checkHealth();
+  setInterval(checkHealth, 15000);
+
+  function setWave(active) {
+    wf.querySelectorAll("div").forEach((bar, i) => {
+      if (active) {
+        const isPink = bar.className.includes("hh-pink");
+        bar.className = `w-2 ${isPink ? "bg-hh-pink" : "bg-hh-yellow"} rounded-full animate-pulse`;
+        bar.style.height = `${16 + (i % 3) * 14}px`;
+      } else {
+        const isPink = i === 2 || i === 5;
+        bar.className = `w-2 ${isPink ? "bg-hh-pink/40" : "bg-hh-yellow/40"} h-4 rounded-full`;
+      }
+    });
+  }
+
+  function formatTime(s) {
+    const m = Math.floor(s / 60).toString().padStart(2, "0");
+    const sec = (s % 60).toString().padStart(2, "0");
+    return `${m}:${sec}`;
+  }
+
+  function enableRun() {
+    runBtn.disabled = false;
+    runBtn.className = "bg-hh-yellow text-hh-green font-bold px-5 py-2.5 rounded-xl border-2 border-hh-green shadow-[3px_3px_0px_#044D29] hover:bg-white transition";
+  }
+  function disableRun() {
+    runBtn.disabled = true;
+    runBtn.className = "bg-black/30 text-white/40 font-bold px-5 py-2.5 rounded-xl border-2 border-hh-green/40 transition cursor-not-allowed";
+  }
+
+  async function toggleRecord() {
+    errorMsg.classList.add("hidden");
+    if (!recording) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioChunks = [];
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+        mediaRecorder.onstop = () => {
+        audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+        enableRun();
+        stream.getTracks().forEach(t => t.stop());
+        clearInterval(timerInterval);
+        setWave(false);
+        runPipeline();   // auto-run as soon as recording stops
+        };
+        mediaRecorder.start();
+        recording = true;
+        recordBtn.textContent = "■ STOP";
+        setWave(true);
+        seconds = 0;
+        timerInterval = setInterval(() => {
+          seconds++;
+          timer.textContent = formatTime(seconds);
+        }, 1000);
+      } catch (err) {
+        errorMsg.textContent = "Microphone access denied or unavailable.";
+        errorMsg.classList.remove("hidden");
+      }
+    } else {
+      mediaRecorder.stop();
+      recording = false;
+      recordBtn.textContent = "● RECORD";
+    }
+  }
+
+  fileInput.addEventListener("change", () => {
+  if (fileInput.files.length > 0) {
+    audioBlob = fileInput.files[0];
+    enableRun();
+    runPipeline();   // auto-run as soon as a file is picked
+    }
+  });
+
+  resetBtn.addEventListener("click", () => {
+    audioBlob = null;
+    disableRun();
+    seconds = 0;
+    timer.textContent = "00:00";
+    transcriptText.textContent = "> Record or upload audio, then run the pipeline to see the transcript here.";
+    answerText.textContent = "—";
+    statusPill.textContent = "IDLE";
+    wordCount.textContent = "0 WORDS";
+    lastStatus.textContent = "—";
+    lastLatency.textContent = "—";
+    errorMsg.classList.add("hidden");
+    fileInput.value = "";
+  });
+
+  copyBtn.addEventListener("click", () => {
+    navigator.clipboard.writeText(transcriptText.textContent);
+  });
+
+  async function runPipeline() {
+    if (!audioBlob) {
+      errorMsg.textContent = "Record or upload audio first.";
+      errorMsg.classList.remove("hidden");
+      return;
+    }
+    errorMsg.classList.add("hidden");
+    runBtn.disabled = true;
+    runBtn.textContent = "RUNNING...";
+    statusPill.textContent = "PROCESSING";
+    transcriptText.textContent = "> processing...";
+    answerText.textContent = "—";
+
+    const formData = new FormData();
+    formData.append("audio_file", audioBlob, audioBlob.name || "recording.webm");
+
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/voice-query`, {
+        method: "POST",
+        body: formData
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      transcriptText.textContent = "> " + (data.transcription || "(no speech detected)");
+      answerText.textContent = data.answer || "—";
+
+      const words = (data.transcription || "").trim().split(/\s+/).filter(Boolean).length;
+      wordCount.textContent = `${words} WORDS`;
+
+      statusPill.textContent = (data.status || "—").toUpperCase();
+      lastStatus.textContent = data.status || "—";
+      lastLatency.textContent = data.latency_ms ? `${data.latency_ms} ms` : "—";
+
+    } catch (err) {
+      errorMsg.textContent = "Could not reach harness — is backend.py running on 5050?";
+      errorMsg.classList.remove("hidden");
+      transcriptText.textContent = "> Record or upload audio, then run the pipeline to see the transcript here.";
+      statusPill.textContent = "ERROR";
+      lastStatus.textContent = "error";
+    } finally {
+      enableRun();
+      runBtn.textContent = "RUN PIPELINE";
+    }
+  }
+
+  recordBtn.addEventListener("click", toggleRecord);
+  runBtn.addEventListener("click", runPipeline);
+</script>
 
 </body>
 </html>

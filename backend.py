@@ -1,4 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 import time
 import logging
 import httpx
@@ -11,6 +12,18 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Voice-Enabled RAG Harness")
+
+# CORS: required so the browser-based ui.html (served from a different
+# origin/port than this backend) is allowed to call these endpoints.
+# allow_origins=["*"] is fine for local dev; restrict this to your real
+# frontend domain(s) before deploying.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 RETRIEVAL_URL = "http://127.0.0.1:8000/retrieve"
 
