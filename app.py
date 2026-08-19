@@ -1,20 +1,37 @@
 import json
+import os
 import time
 from contextlib import asynccontextmanager
 
-import numpy as np
 import faiss
+import numpy as np
+import requests
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
-from sentence_transformers import SentenceTransformer
 
-# --- Global state, loaded once at startup ---
+# --- Global state ---
 state = {}
+
+HF_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+HF_API_URL = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{HF_MODEL}"
+HF_TOKEN = os.environ.get("HF_TOKEN", "")
+
+
+def get_hf_embedding(text: str) -> np.ndarray:
+    """Fetch embeddings from Hugging Face API to bypass local PyTorch RAM usage."""
+    headers = {"Authorization": f"Bearer {HF_TOKEN}"} if HF_TOKEN else {}
+    payload = {"inputs": [text], "options": {"wait_for_model": True}}
+
+    response = requests.post(HF_API_URL, headers=headers, json=payload)
+    response.raise_for_status()
+
+    embedding = response.json()
+    return np.array(embedding, dtype="float32")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("Loading model, FAISS index, and corpus...")
-    state["model"] = SentenceTransformer("all-MiniLM-L6-v2")
+    print("Loading FAISS index and corpus...")
     state["index"] = faiss.read_index("faiss_index.bin")
 
     with open("corpus_meta.json", "r", encoding="utf-8") as f:
@@ -22,25 +39,24 @@ async def lifespan(app: FastAPI):
     state["corpus"] = data["corpus"]
     state["corpus_meta"] = data["meta"]
 
-    # Warm-up call so the first real request isn't slow
-    _ = state["model"].encode(["warm up query"], convert_to_numpy=True)
     print("Startup complete. Ready to serve.")
-
-    yield  # app runs here
-
+    yield
     state.clear()
+
 
 app = FastAPI(title="Retrieval Service", lifespan=lifespan)
 
 
-# --- Request/response schemas (structured I/O) ---
+# --- Request/response schemas ---
 class RetrieveRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=1000)
     k: int = Field(default=5, ge=1, le=20)
 
+
 class RetrievedChunk(BaseModel):
     passage: str
     score: float
+
 
 class RetrieveResponse(BaseModel):
     query: str
@@ -57,27 +73,26 @@ def health():
 def retrieve(req: RetrieveRequest):
     start = time.perf_counter()
 
-    query_emb = state["model"].encode([req.query], convert_to_numpy=True).astype("float32")
+    query_emb = get_hf_embedding(req.query)
     distances, indices = state["index"].search(query_emb, req.k)
 
     chunks = []
     for idx, dist in zip(indices[0], distances[0]):
-        chunks.append(RetrievedChunk(
-            passage=state["corpus"][idx],
-            score=float(dist)
-        ))
+        chunks.append(
+            RetrievedChunk(
+                passage=state["corpus"][idx], score=float(dist)
+            )
+        )
 
     latency_ms = (time.perf_counter() - start) * 1000
 
     return RetrieveResponse(
-        query=req.query,
-        chunks=chunks,
-        latency_ms=latency_ms
+        query=req.query, chunks=chunks, latency_ms=latency_ms
     )
+
+
 if __name__ == "__main__":
-    import os
     import uvicorn
 
-    # Render sets the PORT env variable automatically
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run(app, host="0.0.0.0", port=port)
