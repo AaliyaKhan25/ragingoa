@@ -25,7 +25,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-RETRIEVAL_URL = "http://127.0.0.1:8000/retrieve"
+RETRIEVAL_URL = "https://ragingoa.onrender.com"
 
 groq_client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
