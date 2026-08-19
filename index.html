@@ -166,7 +166,7 @@
   </div>
 
 <script>
-  const API_BASE = "https://ragingoa.onrender.com";
+  const API_BASE = "https://ragingoa-1.onrender.com";
   const $ = (id) => document.getElementById(id);
 
   const statusBadge = $("status-badge");
@@ -244,12 +244,12 @@
         mediaRecorder = new MediaRecorder(stream);
         mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
         mediaRecorder.onstop = () => {
-        audioBlob = new Blob(audioChunks, { type: "audio/webm" });
-        enableRun();
-        stream.getTracks().forEach(t => t.stop());
-        clearInterval(timerInterval);
-        setWave(false);
-        runPipeline();   // auto-run as soon as recording stops
+          audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+          enableRun();
+          stream.getTracks().forEach(t => t.stop());
+          clearInterval(timerInterval);
+          setWave(false);
+          runPipeline();
         };
         mediaRecorder.start();
         recording = true;
@@ -272,10 +272,10 @@
   }
 
   fileInput.addEventListener("change", () => {
-  if (fileInput.files.length > 0) {
-    audioBlob = fileInput.files[0];
-    enableRun();
-    runPipeline();   // auto-run as soon as a file is picked
+    if (fileInput.files.length > 0) {
+      audioBlob = fileInput.files[0];
+      enableRun();
+      runPipeline();
     }
   });
 
@@ -333,7 +333,7 @@
       lastLatency.textContent = data.latency_ms ? `${data.latency_ms} ms` : "—";
 
     } catch (err) {
-      errorMsg.textContent = "Could not reach harness — is backend.py running on 5050?";
+      errorMsg.textContent = "Could not reach harness service on Render.";
       errorMsg.classList.remove("hidden");
       transcriptText.textContent = "> Record or upload audio, then run the pipeline to see the transcript here.";
       statusPill.textContent = "ERROR";
